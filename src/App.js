@@ -19,9 +19,15 @@ class App extends React.Component {
     };
   }
 
+  componentDidMount() {
+    if (localStorage.getItem("fileUpload") !== null) {
+      this.setState({isFileUploaded: true, locs: JSON.parse(localStorage.getItem("fileUpload"))});
+    }
+  }
+
   parseJSONFile(file) {
-    var fileSize = file.size;
-    
+    // TODO update MB state
+    var fileSize = file.size;    
 
     this.setState({
       isFileUploaded: false,
@@ -33,24 +39,17 @@ class App extends React.Component {
       }
     });
 
-    // var prettyFileSize = prettySize(fileSize);
-    // TODO update MB state
 
 		var chunkSize = 512 * 1024; // bytes
 		var offset = 0;
-		// var self = this; // we need a reference to the current object
 		var chunkReaderBlock = null;
     
-    // var startTime = Date.now();
-    // var endTime = Date.now();
-    var SCALAR_E7 = 0.0000001; // Since Google Takeout stores latlngs as integers
-    
     function prettyLatLon(lat) {
+      var SCALAR_E7 = 0.0000001; // Since Google Takeout stores latlngs as integers
       return lat * SCALAR_E7;
     }
 
     var datePointMap = {};
-
     var oboeInstance = new oboe();
     oboeInstance
       .node('locations.*', function(location) {
@@ -70,50 +69,51 @@ class App extends React.Component {
         var earliestDate = moment(dateSpread[0], 'MM/DD/YYYY');
         var latestDate = moment(dateSpread[dateSpread.length - 1], 'MM/DD/YYYY');
         var dateRange = moment.range(earliestDate, latestDate);
-        console.log(dateRange);
 
         var allDates = [];
-        for (let date of dateRange.by('days')) {
+        // Iterate through range by day and store each date in a list
+        for (let date of dateRange.reverseBy('days')) {
           allDates.push(date.format("MM/DD/YYYY"));
         }
         
         var locs = {...this.state.locs};
         locs.datePoints = datePointMap;
         locs.allDates = allDates;
-        console.log(locs);
         this.setState({isFileUploaded: true, locs});
+
+        localStorage.setItem("fileUpload", JSON.stringify(this.state.locs));
+        console.log("Wrote file to local storage");
       }.bind(this));
     
     var readEventHandler = function (evt) {
       if ( evt.target.error == null ) {
         offset += evt.target.result.length;
         var chunk = evt.target.result;
-        var percentLoaded = ( 100 * offset / fileSize ).toFixed( 0 );
+        var percentLoaded = (100 * offset / fileSize ).toFixed(0);
 
         var locs = {...this.state.locs};
         locs.parsePct = percentLoaded;
         this.setState({locs});
         
-        oboeInstance.emit( 'data', chunk );
+        oboeInstance.emit('data', chunk);
       } else {
         return;
       }
       if (offset >= fileSize) {
-        oboeInstance.emit( 'done' );
-        
+        oboeInstance.emit('done');
         return;
       }
 
       chunkReaderBlock(offset, chunkSize, file);
     }.bind(this);
 
+    // Define a function to read a chunk of the json
     chunkReaderBlock = function(_offset, length, _file) {
       var r = new FileReader();
       var blob = _file.slice(_offset, length + _offset);
       r.onload = readEventHandler;
-      r.readAsText( blob );
+      r.readAsText(blob);
     }
-
     chunkReaderBlock(offset, chunkSize, file);
   }
   
@@ -122,6 +122,8 @@ class App extends React.Component {
   }
 
   onNewFile() {
+    // Redirect back to home page
+    localStorage.removeItem("fileUpload");
     this.setState({isFileUploaded: false, locs: null});
   }
   
@@ -131,9 +133,7 @@ class App extends React.Component {
         { !this.state.isFileUploaded &&
           <header className="App-header">
             <img src={logo} className="App-logo" alt="logo" />
-            <h2>
-              Google Maps Timeline Aggregator
-            </h2>
+            <h2>Google Maps Timeline Aggregator</h2>
 
             <h5>Motivation</h5>
             <p>

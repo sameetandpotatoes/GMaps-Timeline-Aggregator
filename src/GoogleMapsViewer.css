@@ -2,3 +2,11 @@
     display: flex;
     flex-direction: row;
 }
+
+.date {
+    padding: 10px;
+}
+
+.selected {
+    background-color: blue;
+}
