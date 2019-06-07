@@ -1,27 +1,48 @@
 import React from 'react';
 import oboe from 'oboe';
-import moment from 'moment';
 import logo from './logo.svg';
+import GoogleMapsViewer from './GoogleMapsViewer.js';
 import './App.css';
 
+import Moment from 'moment';
+import { extendMoment } from 'moment-range';
+const moment = extendMoment(Moment);
+
 class App extends React.Component {
-  init() {
-    this.parseJSONFile = this.parseJSONFile.bind(this)
+  constructor(props) {
+    super(props)
+    this.parseJSONFile = this.parseJSONFile.bind(this);
+
+    this.state = {
+      isFileUploaded: false,
+      locs: null
+    };
   }
 
   parseJSONFile(file) {
     var fileSize = file.size;
-    console.log("File Size: " + fileSize);
+    
+
+    this.setState({
+      isFileUploaded: false,
+      locs: {
+        fileSize: fileSize,
+        parsePct: 0,
+        datePoints: [],
+        allDates: []
+      }
+    });
+
     // var prettyFileSize = prettySize(fileSize);
     // TODO update MB state
 
 		var chunkSize = 512 * 1024; // bytes
 		var offset = 0;
-		var self = this; // we need a reference to the current object
+		// var self = this; // we need a reference to the current object
 		var chunkReaderBlock = null;
     
-    var startTime = Date.now();
-    var endTime = Date.now();
+    // var startTime = Date.now();
+    // var endTime = Date.now();
     var SCALAR_E7 = 0.0000001; // Since Google Takeout stores latlngs as integers
     
     function prettyLatLon(lat) {
@@ -45,56 +66,89 @@ class App extends React.Component {
           datePointMap[dateStr] = [locEntry];
         }
       }).done(function() {
-        console.log(datePointMap);
-        // display the range of dates (get min / max) and then upon selecting, it should just plot the points for that
-      });
+        var dateSpread = Object.keys(datePointMap).sort();
+        var earliestDate = moment(dateSpread[0], 'MM/DD/YYYY');
+        var latestDate = moment(dateSpread[dateSpread.length - 1], 'MM/DD/YYYY');
+        var dateRange = moment.range(earliestDate, latestDate);
+        console.log(dateRange);
+
+        var allDates = [];
+        for (let date of dateRange.by('days')) {
+          allDates.push(date.format("MM/DD/YYYY"));
+        }
+        
+        var locs = {...this.state.locs};
+        locs.datePoints = datePointMap;
+        locs.allDates = allDates;
+        console.log(locs);
+        this.setState({isFileUploaded: true, locs});
+      }.bind(this));
     
-    var readEventHandler = function ( evt ) {
+    var readEventHandler = function (evt) {
       if ( evt.target.error == null ) {
         offset += evt.target.result.length;
         var chunk = evt.target.result;
         var percentLoaded = ( 100 * offset / fileSize ).toFixed( 0 );
-        console.log(percentLoaded);
-        // status( percentLoaded + '% of ' + prettyFileSize + ' loaded...' );
-        oboeInstance.emit( 'data', chunk ); // callback for handling read chunk
+
+        var locs = {...this.state.locs};
+        locs.parsePct = percentLoaded;
+        this.setState({locs});
+        
+        oboeInstance.emit( 'data', chunk );
       } else {
         return;
       }
-      if ( offset >= fileSize ) {
+      if (offset >= fileSize) {
         oboeInstance.emit( 'done' );
+        
         return;
       }
 
-      // of to the next chunk
-      chunkReaderBlock( offset, chunkSize, file );
-    }
+      chunkReaderBlock(offset, chunkSize, file);
+    }.bind(this);
 
-    chunkReaderBlock = function ( _offset, length, _file ) {
+    chunkReaderBlock = function(_offset, length, _file) {
       var r = new FileReader();
-      var blob = _file.slice( _offset, length + _offset );
+      var blob = _file.slice(_offset, length + _offset);
       r.onload = readEventHandler;
       r.readAsText( blob );
     }
 
-    // now let's start the read with the first block
-    chunkReaderBlock( offset, chunkSize, file );
+    chunkReaderBlock(offset, chunkSize, file);
   }
   
   onChangeHandler(e) {
-    console.log(e.target.files[0])
     this.parseJSONFile(e.target.files[0])
+  }
+
+  onNewFile() {
+    this.setState({isFileUploaded: false, locs: null});
   }
   
   render() {
     return (
       <div className="App">
-        <header className="App-header">
-          <img src={logo} className="App-logo" alt="logo" />
-          <p>
-            Edit <code>src/App.js</code> and save to reload.
-          </p>       
-          <input type="file" name="file" onChange={this.onChangeHandler.bind(this)}/>
-        </header>
+        { !this.state.isFileUploaded &&
+          <header className="App-header">
+            <img src={logo} className="App-logo" alt="logo" />
+            <h2>
+              Google Maps Timeline Aggregator
+            </h2>
+
+            <h5>Motivation</h5>
+            <p>
+              The Timeline feature in Google Maps is a pretty interesting way to track your whereabouts throughout a day, but it only limits you to one day at a time. This tool can provide a quick way for you to see that data over a period of time. The tool works best when you are in the same city / location in that period of time (e.g visiting a new city).
+            </p>
+            <input type="file" name="file" onChange={this.onChangeHandler.bind(this)}/>
+            { this.state.locs &&
+              <p>{this.state.locs.parsePct}% of {this.state.locs.fileSize} bytes loaded...</p>
+            }
+          </header>
+        }
+        
+        { this.state.isFileUploaded && 
+          <GoogleMapsViewer locs={this.state.locs} onNewFile={this.onNewFile.bind(this)}/> 
+        }
       </div>
     );
   }  
