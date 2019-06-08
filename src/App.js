@@ -132,7 +132,6 @@ class App extends React.Component {
       <div className="App">
         { !this.state.isFileUploaded &&
           <header className="App-header">
-            <img src={logo} className="App-logo" alt="logo" />
             <h2>Google Maps Timeline Aggregator</h2>
 
             <h5>Motivation</h5>

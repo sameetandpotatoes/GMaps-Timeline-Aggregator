@@ -1,8 +1,12 @@
 import React from 'react';
+import DatePicker from 'react-datepicker';
 import moment from 'moment';
 import GoogleMapReact from 'google-map-react';
 import PropTypes from 'prop-types';
+
 import './GoogleMapsViewer.css';
+import "react-datepicker/dist/react-datepicker.css";
+
 import { GOOGLE_MAPS_API_KEY } from './keys.js';
 
 class GoogleMapsViewer extends React.Component {
@@ -19,8 +23,11 @@ class GoogleMapsViewer extends React.Component {
 
         this.state = {
             selectedDates: [],
+            dateToColorMappings: {},
             refreshMapCounter: 0,
-            features: [] 
+            features: [],
+            startDate: null,
+            endDate: null 
         }
 
         this.onToggleSelectedDates = this.onToggleSelectedDates.bind(this)
@@ -28,7 +35,13 @@ class GoogleMapsViewer extends React.Component {
 
     componentDidMount() {
         // By default, select the first date
-        this.setState({selectedDates: [this.props.locs.allDates[0]]})
+        const startDate = this.props.locs.allDates[0];
+        const endDate = this.props.locs.allDates[this.props.locs.allDates.length - 1];
+        this.setState({
+            selectedDates: [startDate, endDate],
+            startDate: moment(startDate),
+            endDate: moment(endDate)
+        });
     }
 
     removeAllFeatures() {
@@ -62,7 +75,14 @@ class GoogleMapsViewer extends React.Component {
         let bounds = new maps.LatLngBounds();
         let features = [];
         this.state.selectedDates.map((selDate) => {
-            let randDarkColor = this.randomDarkColor();
+            let randDarkColor;
+            if (selDate in this.state.dateToColorMappings) {
+                randDarkColor = this.state.dateToColorMappings[selDate];
+            } else {
+                randDarkColor = this.randomDarkColor();
+                this.state.dateToColorMappings[selDate] = randDarkColor;
+            }
+
             datePoints[selDate].map((locEntry) => {
                 let coords = {lat: parseFloat(locEntry.lat), lng: parseFloat(locEntry.lon)};
                 let marker = new maps.Marker({
@@ -80,7 +100,7 @@ class GoogleMapsViewer extends React.Component {
                     }
                 });
                 let window = new maps.InfoWindow({
-                    content: moment(locEntry.timestamp).format("hh:mm:ss a")
+                    content: moment(locEntry.timestamp).format("MMMM DD hh:mm:ss a")
                 });
                 marker.addListener('click', function() {
                     window.open(map, marker);
@@ -104,6 +124,19 @@ class GoogleMapsViewer extends React.Component {
 
         this.setState({features});
         map.setCenter(bounds.getCenter());
+
+        maps.event.addListener(map, 'zoom_changed', function() {
+            let zoomChangeBoundsListener = 
+                maps.event.addListener(map, 'bounds_changed', function(event) {
+                    if (this.getZoom() > 17 && this.initialZoom == true) {
+                        // Change max/min zoom here
+                        this.setZoom(17);
+                        this.initialZoom = false;
+                    }
+                maps.event.removeListener(zoomChangeBoundsListener);
+            });
+        });
+        map.initialZoom = true;
         map.fitBounds(bounds);
     }
 
@@ -115,26 +148,62 @@ class GoogleMapsViewer extends React.Component {
             this.state.selectedDates.push(dateStr);
         }
         this.setState({refreshMapCounter: this.state.refreshMapCounter + 1});
-        console.log(this.state);
+    }
+
+    toDate(str_date) {
+        return moment(str_date).toDate();
+    }
+
+    onNewDateSelection(date) {
+        // date object
+        let momentDate = moment(date);
+
+        if (this.state.startDate === null) {
+            this.setState({
+                startDate: momentDate,
+                endDate: null
+            })
+        } else if (this.state.endDate === null && momentDate >= this.state.startDate) { // startDate != null
+            this.setState({
+                endDate: momentDate
+            })
+        } else { // startDate != null && endDate != null
+            // Reset
+            this.setState({
+                startDate: momentDate,
+                endDate: null
+            })
+        }
     }
 
     render() {
         return (
             <div className="google-maps-view">
             <div style={{ height: '100vh', width: '20%' }}>
-              <h5>Date Timeline</h5>
-              <a onClick={this.props.onNewFile} href="#">Upload a new file</a>
-              { this.props.locs && this.props.locs.allDates.map((date) => (
-                <p key={date}
-                    onClick={this.onToggleSelectedDates}
-                    className={
-                        "date " +
-                        (this.state.selectedDates.indexOf(date) >= 0 ? "selected" : "")
-                      }
-                    >
-                    {date}
-                </p>
-              ))}
+                <h5>Date Timeline</h5>
+                <a onClick={this.props.onNewFile} href="#">Upload a new file</a>
+
+                <p>Select a start and end date to see consecutive aggregate location data</p>
+                <DatePicker
+                    inline
+                    selected={moment(this.state.selectedDates[0]).toDate()}
+                    minDate={(this.state.startDate && this.state.startDate.toDate()) || new Date()}
+                    maxDate={(this.state.endDate && this.state.endDate.toDate()) || new Date()}
+                    onSelect={this.onNewDateSelection}
+                />
+
+                <h5>Map Legend</h5>
+                <div>
+                    {this.state.selectedDates.map((key, i) => {
+                       return (
+                        <p>
+                            <div className="color-block-legend" style={{"background-color": this.state.dateToColorMappings[key]}}></div>
+                            {key.toString()}
+                        </p>
+                       );             
+                    })}
+                </div>
+                
             </div>
             <div style={{ height: '100vh', width: '80%' }}>
               <GoogleMapReact

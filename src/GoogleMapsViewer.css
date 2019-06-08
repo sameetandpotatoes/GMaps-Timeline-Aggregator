@@ -10,3 +10,10 @@
 .selected {
     background-color: blue;
 }
+
+.color-block-legend {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    margin-right: 5px;
+}
