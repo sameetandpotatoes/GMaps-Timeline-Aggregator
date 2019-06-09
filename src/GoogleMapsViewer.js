@@ -1,6 +1,5 @@
 import React from 'react';
 import DatePicker from 'react-datepicker';
-import moment from 'moment';
 import GoogleMapReact from 'google-map-react';
 import PropTypes from 'prop-types';
 
@@ -8,6 +7,10 @@ import './GoogleMapsViewer.css';
 import "react-datepicker/dist/react-datepicker.css";
 
 import { GOOGLE_MAPS_API_KEY } from './keys.js';
+
+import Moment from 'moment';
+import { extendMoment } from 'moment-range';
+const moment = extendMoment(Moment);
 
 class GoogleMapsViewer extends React.Component {
     // Random center for Google Maps, gets overridden by marker rendering
@@ -26,21 +29,23 @@ class GoogleMapsViewer extends React.Component {
             dateToColorMappings: {},
             refreshMapCounter: 0,
             features: [],
+            earliestDate: null,
+            latestDate: null,
             startDate: null,
-            endDate: null 
+            endDate: null
         }
-
-        this.onToggleSelectedDates = this.onToggleSelectedDates.bind(this)
     }
 
     componentDidMount() {
-        // By default, select the first date
-        const startDate = this.props.locs.allDates[0];
-        const endDate = this.props.locs.allDates[this.props.locs.allDates.length - 1];
+        const earliestDate = moment(this.props.locs.startDate);
+        const latestDate = moment(this.props.locs.endDate);
+        const startDate = earliestDate;
         this.setState({
-            selectedDates: [startDate, endDate],
-            startDate: moment(startDate),
-            endDate: moment(endDate)
+            // By default, select the first date
+            selectedDates: [startDate.format("MM/DD/YYYY")],
+            earliestDate: earliestDate,
+            latestDate: latestDate,
+            startDate: startDate
         });
     }
 
@@ -74,7 +79,25 @@ class GoogleMapsViewer extends React.Component {
         let dayPath = [];
         let bounds = new maps.LatLngBounds();
         let features = [];
-        this.state.selectedDates.map((selDate) => {
+
+        
+        // var dateRange = moment.range(this.state.startDate, this.state.endDate);
+        // for (let date of dateRange.reverseBy('days')) {
+
+        let selectedDates = [];
+        if (this.state.endDate != null) {
+            var dateRange = moment.range(this.state.startDate, this.state.endDate);
+            for (let date of dateRange.by('days')) {
+                selectedDates.push(date);
+            }
+        } else {
+            selectedDates.push(this.state.startDate);
+        }
+        console.log(selectedDates);
+
+        selectedDates.map((momentDate) => {
+            let selDate = momentDate.format("MM/DD/YYYY");
+            // Get or update dark color mapping
             let randDarkColor;
             if (selDate in this.state.dateToColorMappings) {
                 randDarkColor = this.state.dateToColorMappings[selDate];
@@ -82,7 +105,6 @@ class GoogleMapsViewer extends React.Component {
                 randDarkColor = this.randomDarkColor();
                 this.state.dateToColorMappings[selDate] = randDarkColor;
             }
-
             datePoints[selDate].map((locEntry) => {
                 let coords = {lat: parseFloat(locEntry.lat), lng: parseFloat(locEntry.lon)};
                 let marker = new maps.Marker({
@@ -140,38 +162,30 @@ class GoogleMapsViewer extends React.Component {
         map.fitBounds(bounds);
     }
 
-    onToggleSelectedDates(e) {
-        let dateStr = e.target.textContent;
-        if (this.state.selectedDates.indexOf(dateStr) >= 0) {
-            this.state.selectedDates.splice(this.state.selectedDates.indexOf(dateStr), 1);
-        } else {
-            this.state.selectedDates.push(dateStr);
-        }
-        this.setState({refreshMapCounter: this.state.refreshMapCounter + 1});
-    }
-
     toDate(str_date) {
         return moment(str_date).toDate();
     }
 
     onNewDateSelection(date) {
-        // date object
-        let momentDate = moment(date);
-
+        // date param is date object
+        const newRefreshMapCounter = this.state.refreshMapCounter + 1;
         if (this.state.startDate === null) {
             this.setState({
-                startDate: momentDate,
-                endDate: null
+                startDate: date,
+                endDate: null,
+                refreshMapCounter: newRefreshMapCounter
             })
-        } else if (this.state.endDate === null && momentDate >= this.state.startDate) { // startDate != null
+        } else if (this.state.endDate === null && date >= this.state.startDate) { // startDate != null
             this.setState({
-                endDate: momentDate
+                endDate: date,
+                refreshMapCounter: newRefreshMapCounter
             })
         } else { // startDate != null && endDate != null
             // Reset
             this.setState({
-                startDate: momentDate,
-                endDate: null
+                startDate: date,
+                endDate: null,
+                refreshMapCounter: newRefreshMapCounter
             })
         }
     }
@@ -179,31 +193,45 @@ class GoogleMapsViewer extends React.Component {
     render() {
         return (
             <div className="google-maps-view">
-            <div style={{ height: '100vh', width: '20%' }}>
+            <div style={{ height: '100vh', width: '20%', overflow: 'scroll' }}>
                 <h5>Date Timeline</h5>
                 <a onClick={this.props.onNewFile} href="#">Upload a new file</a>
 
-                <p>Select a start and end date to see consecutive aggregate location data</p>
-                <DatePicker
-                    inline
-                    selected={moment(this.state.selectedDates[0]).toDate()}
-                    minDate={(this.state.startDate && this.state.startDate.toDate()) || new Date()}
-                    maxDate={(this.state.endDate && this.state.endDate.toDate()) || new Date()}
-                    onSelect={this.onNewDateSelection}
-                />
+                {/* TODO higlight the date range, make sure legend iterates through this too */}
+                { this.state.earliestDate && this.state.latestDate &&
+                    <div>
+                        <p>Select a start and end date to see consecutive aggregate location data</p>
+                        <DatePicker
+                            inline
+                            selected={moment(this.state.selectedDates[0]).toDate()}
+                            minDate={this.state.earliestDate.toDate()}
+                            maxDate={this.state.latestDate.toDate()}
+                            onSelect={this.onNewDateSelection.bind(this)}
+                        />
+                    </div>
+                }
 
                 <h5>Map Legend</h5>
                 <div>
-                    {this.state.selectedDates.map((key, i) => {
+                    {Array.from(new Set(this.state.selectedDates)).map((key, _i) => {
                        return (
-                        <p>
-                            <div className="color-block-legend" style={{"background-color": this.state.dateToColorMappings[key]}}></div>
+                        <p key={key}>
+                            <span className="color-block-legend" style={{backgroundColor: this.state.dateToColorMappings[key]}}></span>
                             {key.toString()}
                         </p>
                        );             
                     })}
                 </div>
                 
+                { this.state.earliestDate && this.state.latestDate &&
+                    <div>
+                        <h5>Timeline Metadata</h5>
+                        <div>
+                            <p>Earliest Date: {this.state.earliestDate.format("MM/DD/YYYY")}</p>
+                            <p>Latest Date: {this.state.latestDate.format("MM/DD/YYYY")}</p>
+                        </div>
+                    </div>
+                }
             </div>
             <div style={{ height: '100vh', width: '80%' }}>
               <GoogleMapReact

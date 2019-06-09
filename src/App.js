@@ -1,12 +1,9 @@
 import React from 'react';
+import moment from 'moment';
 import oboe from 'oboe';
 import logo from './logo.svg';
 import GoogleMapsViewer from './GoogleMapsViewer.js';
 import './App.css';
-
-import Moment from 'moment';
-import { extendMoment } from 'moment-range';
-const moment = extendMoment(Moment);
 
 class App extends React.Component {
   constructor(props) {
@@ -35,7 +32,8 @@ class App extends React.Component {
         fileSize: fileSize,
         parsePct: 0,
         datePoints: [],
-        allDates: []
+        startDate: null, // Start date of the data, as a moment obj
+        endDate: null, // End date of the data, as a moment obj
       }
     });
 
@@ -68,17 +66,18 @@ class App extends React.Component {
         var dateSpread = Object.keys(datePointMap).sort();
         var earliestDate = moment(dateSpread[0], 'MM/DD/YYYY');
         var latestDate = moment(dateSpread[dateSpread.length - 1], 'MM/DD/YYYY');
-        var dateRange = moment.range(earliestDate, latestDate);
+        // var dateRange = moment.range(earliestDate, latestDate);
 
-        var allDates = [];
-        // Iterate through range by day and store each date in a list
-        for (let date of dateRange.reverseBy('days')) {
-          allDates.push(date.format("MM/DD/YYYY"));
-        }
+        // var allDates = [];
+        // // Iterate through range by day and store each date in a list
+        // for (let date of dateRange.reverseBy('days')) {
+        //   allDates.push(date.format("MM/DD/YYYY"));
+        // }
         
         var locs = {...this.state.locs};
         locs.datePoints = datePointMap;
-        locs.allDates = allDates;
+        locs.startDate = earliestDate;
+        locs.endDate = latestDate;
         this.setState({isFileUploaded: true, locs});
 
         localStorage.setItem("fileUpload", JSON.stringify(this.state.locs));
