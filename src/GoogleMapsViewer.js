@@ -42,7 +42,7 @@ class GoogleMapsViewer extends React.Component {
         const startDate = earliestDate;
         this.setState({
             // By default, select the first date
-            selectedDates: [startDate.format("MM/DD/YYYY")],
+            selectedDates: [startDate],
             earliestDate: earliestDate,
             latestDate: latestDate,
             startDate: startDate
@@ -81,19 +81,17 @@ class GoogleMapsViewer extends React.Component {
         let features = [];
 
         
-        // var dateRange = moment.range(this.state.startDate, this.state.endDate);
-        // for (let date of dateRange.reverseBy('days')) {
-
         let selectedDates = [];
-        if (this.state.endDate != null) {
-            var dateRange = moment.range(this.state.startDate, this.state.endDate);
-            for (let date of dateRange.by('days')) {
-                selectedDates.push(date);
-            }
+        if (this.state.endDate !== null) {
+            debugger;
+            var dateRange = Array.from(moment.range(this.state.startDate, this.state.endDate).by('days'));
+            dateRange.forEach(function(date, i) {
+                selectedDates.push(moment(date.toDate()));
+            });
         } else {
             selectedDates.push(this.state.startDate);
         }
-        console.log(selectedDates);
+        let dateToColorMappings = this.state.dateToColorMappings;
 
         selectedDates.map((momentDate) => {
             let selDate = momentDate.format("MM/DD/YYYY");
@@ -103,7 +101,7 @@ class GoogleMapsViewer extends React.Component {
                 randDarkColor = this.state.dateToColorMappings[selDate];
             } else {
                 randDarkColor = this.randomDarkColor();
-                this.state.dateToColorMappings[selDate] = randDarkColor;
+                dateToColorMappings[selDate] = randDarkColor;
             }
             datePoints[selDate].map((locEntry) => {
                 let coords = {lat: parseFloat(locEntry.lat), lng: parseFloat(locEntry.lon)};
@@ -144,13 +142,13 @@ class GoogleMapsViewer extends React.Component {
             return null;
         });
 
-        this.setState({features});
+        this.setState({selectedDates, dateToColorMappings, features});
         map.setCenter(bounds.getCenter());
 
         maps.event.addListener(map, 'zoom_changed', function() {
             let zoomChangeBoundsListener = 
                 maps.event.addListener(map, 'bounds_changed', function(event) {
-                    if (this.getZoom() > 17 && this.initialZoom == true) {
+                    if (this.getZoom() > 17 && this.initialZoom) {
                         // Change max/min zoom here
                         this.setZoom(17);
                         this.initialZoom = false;
@@ -167,23 +165,24 @@ class GoogleMapsViewer extends React.Component {
     }
 
     onNewDateSelection(date) {
+        let momentDate = moment(moment(date).format("MM/DD/YYYY"), "MM/DD/YYYY")
         // date param is date object
         const newRefreshMapCounter = this.state.refreshMapCounter + 1;
         if (this.state.startDate === null) {
             this.setState({
-                startDate: date,
+                startDate: momentDate,
                 endDate: null,
                 refreshMapCounter: newRefreshMapCounter
             })
         } else if (this.state.endDate === null && date >= this.state.startDate) { // startDate != null
             this.setState({
-                endDate: date,
+                endDate: momentDate,
                 refreshMapCounter: newRefreshMapCounter
             })
         } else { // startDate != null && endDate != null
             // Reset
             this.setState({
-                startDate: date,
+                startDate: momentDate,
                 endDate: null,
                 refreshMapCounter: newRefreshMapCounter
             })
@@ -191,11 +190,18 @@ class GoogleMapsViewer extends React.Component {
     }
 
     render() {
+        // highlight range contains the first and last date of the range
+        let highlightRange = this.state.selectedDates.map(x => x.toDate());
+        // console.log(this.state.selectedDates);
+        // console.log(this.state.selectedDates.map(x => x.format("MM/DD/YYYY")));
+        // console.log(this.state.dateToColorMappings);
+        console.log(highlightRange);
+
         return (
             <div className="google-maps-view">
             <div style={{ height: '100vh', width: '20%', overflow: 'scroll' }}>
                 <h5>Date Timeline</h5>
-                <a onClick={this.props.onNewFile} href="#">Upload a new file</a>
+                <p onClick={this.props.onNewFile} style={{textDecoration: "underline", cursor: "pointer"}}>Upload a new file</p>
 
                 {/* TODO higlight the date range, make sure legend iterates through this too */}
                 { this.state.earliestDate && this.state.latestDate &&
@@ -203,9 +209,10 @@ class GoogleMapsViewer extends React.Component {
                         <p>Select a start and end date to see consecutive aggregate location data</p>
                         <DatePicker
                             inline
-                            selected={moment(this.state.selectedDates[0]).toDate()}
+                            selected={this.state.selectedDates[0].toDate()}
                             minDate={this.state.earliestDate.toDate()}
                             maxDate={this.state.latestDate.toDate()}
+                            highlightDates={highlightRange}
                             onSelect={this.onNewDateSelection.bind(this)}
                         />
                     </div>
@@ -213,10 +220,10 @@ class GoogleMapsViewer extends React.Component {
 
                 <h5>Map Legend</h5>
                 <div>
-                    {Array.from(new Set(this.state.selectedDates)).map((key, _i) => {
-                       return (
-                        <p key={key}>
-                            <span className="color-block-legend" style={{backgroundColor: this.state.dateToColorMappings[key]}}></span>
+                    {Array.from(new Set(this.state.selectedDates.map(x => x.format("MM/DD/YYYY")))).map((key, _i) => {
+                       return(
+                        <p key={key.toString()}>
+                            <span className="color-block-legend" style={{backgroundColor: this.state.dateToColorMappings[key.toString()]}}></span>
                             {key.toString()}
                         </p>
                        );             
