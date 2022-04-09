@@ -4,7 +4,7 @@
   "private": true,
   "dependencies": {
     "google-map-react": "^1.1.4",
-    "moment": "^2.24.0",
+    "moment": "^2.29.2",
     "moment-range": "^4.0.2",
     "oboe": "^2.1.4",
     "react": "^16.8.6",
